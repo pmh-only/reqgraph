@@ -1,0 +1,618 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>ReqGraph - Request Based on Graph Value</title>
+  <!-- Tailwind CSS via CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    canvas {
+      background: #f9fafb;
+    }
+    #editForm {
+      display: none;
+    }
+  </style>
+</head>
+<body class="bg-gray-100">
+  <!-- Header / Branding -->
+  <header class="bg-gradient-to-r from-blue-600 to-purple-600 text-white py-8 shadow-lg">
+    <div class="max-w-4xl mx-auto px-4">
+      <h1 class="text-4xl font-bold">ReqGraph</h1>
+      <p class="mt-2 text-xl">Live request scheduling and monitoring based on graph values</p>
+    </div>
+  </header>
+
+  <!-- Main Container -->
+  <main class="max-w-4xl mx-auto px-4 py-8 space-y-8">
+    <!-- Controls Section -->
+    <div id="controls" class="bg-white p-6 rounded-lg shadow">
+      <div class="flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <label for="testPeriodInput" class="block text-gray-700 font-medium">Test period (in seconds):</label>
+          <input autocomplete="off" type="number" id="testPeriodInput" value="5" step="any" class="mt-1 block w-24 border-gray-300 rounded-md shadow-sm" />
+        </div>
+        <div class="space-x-4">
+          <button id="startStopButton" class="px-6 py-2 bg-blue-600 text-white rounded-md shadow hover:bg-blue-700">Start</button>
+          <button id="resetButton" class="px-6 py-2 bg-red-600 text-white rounded-md shadow hover:bg-red-700">Reset</button>
+        </div>
+      </div>
+      <div class="mt-4">
+        <label for="progressSlider" class="block text-gray-700 font-medium">Progress (%):</label>
+        <input type="range" id="progressSlider" min="0" max="100" value="0" step="0.1" class="w-full" />
+        <p id="progressDisplay" class="mt-1 text-gray-700">Current Progress: 0.0%</p>
+      </div>
+    </div>
+
+    <!-- HTTP Request Form Section -->
+    <div id="httpRequestForm" class="bg-white p-6 rounded-lg shadow">
+      <h2 class="text-2xl font-bold mb-4">HTTP Request</h2>
+      <form id="httpForm" class="space-y-4">
+        <div>
+          <label for="httpMethod" class="block text-gray-700 font-medium">HTTP Method:</label>
+          <select id="httpMethod" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm">
+            <option value="GET">GET</option>
+            <option value="POST">POST</option>
+            <option value="PUT">PUT</option>
+            <option value="PATCH">PATCH</option>
+            <option value="DELETE">DELETE</option>
+            <option value="HEAD">HEAD</option>
+          </select>
+        </div>
+        <div>
+          <label for="uri" class="block text-gray-700 font-medium">URI:</label>
+          <input autocomplete="off" type="text" id="uri" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm" placeholder="Enter URI" />
+        </div>
+        <div>
+          <label class="block text-gray-700 font-medium">Headers:</label>
+          <div id="headersContainer">
+            <div class="flex gap-2 mb-2 header-row">
+              <input autocomplete="off" type="text" class="header-key mt-1 block w-1/2 border-gray-300 rounded-md shadow-sm" placeholder="Header Name" />
+              <input autocomplete="off" type="text" class="header-value mt-1 block w-1/2 border-gray-300 rounded-md shadow-sm" placeholder="Header Value" />
+              <button type="button" class="remove-header bg-red-500 text-white px-2 py-1 rounded">Remove</button>
+            </div>
+          </div>
+          <button type="button" id="addHeaderButton" class="mt-2 bg-blue-500 text-white px-3 py-1 rounded">Add Header</button>
+        </div>
+        <div id="bodyContainer">
+          <label for="body" class="block text-gray-700 font-medium">Body:</label>
+          <textarea id="body" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm" rows="5" placeholder="Enter request body"></textarea>
+        </div>
+      </form>
+    </div>
+
+    <!-- Response Information Section -->
+    <div id="responseInfo" class="bg-white p-6 rounded-lg shadow">
+      <h2 class="text-2xl font-bold mb-4">Response Information</h2>
+      <div>
+        <h3 class="text-xl font-medium">Response Code Count</h3>
+        <table id="responseCodeTable" class="min-w-full border mt-2">
+          <thead>
+            <tr class="bg-gray-200">
+              <th class="border px-4 py-2">Response Code</th>
+              <th class="border px-4 py-2">Count</th>
+            </tr>
+          </thead>
+          <tbody>
+            <!-- Dynamic rows -->
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Graph Section -->
+    <div id="canvasContainer" class="relative bg-white p-6 rounded-lg shadow">
+      <div class="flex items-center space-x-2">
+          <label for="logModeCheckbox" class="text-gray-700 font-medium">Log Mode</label>
+          <input autocomplete="off" type="checkbox" id="logModeCheckbox" class="h-5 w-5" />
+      </div>
+
+      <canvas id="canvas" width="800" height="600" class="rounded"></canvas>
+      <!-- Editable form overlay for adjusting point coordinates -->
+      <div id="editForm" class="absolute bg-white border border-gray-400 rounded p-2 shadow-lg">
+        <div class="mb-2">
+          <label class="block text-sm font-medium text-gray-700">X:
+            <input autocomplete="off" type="number" id="editX" step="any" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm" />
+          </label>
+        </div>
+        <div class="mb-2">
+          <label class="block text-sm font-medium text-gray-700">Y:
+            <input autocomplete="off" type="number" id="editY" step="any" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm" />
+          </label>
+        </div>
+        <div class="flex justify-end gap-2">
+          <button id="updateButton" class="px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700">Update</button>
+          <button id="cancelButton" class="px-3 py-1 bg-gray-600 text-white rounded hover:bg-gray-700">Cancel</button>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- Footer Information -->
+  <footer class="max-w-4xl mx-auto px-4 py-4 text-center text-gray-600">
+    <p>© 2025 Minhyeok Park. All rights reserved.</p>
+  </footer>
+
+  <!-- Additional Info -->
+  <div id="cursorDisplay" class="max-w-4xl mx-auto p-2 text-center text-gray-700">Cursor: X = -, Y = -</div>
+  <div id="bigYDisplay" class="max-w-4xl mx-auto p-2 text-center text-gray-800 font-bold text-2xl">
+    Current Request Count per Second: -
+  </div>
+
+  <!-- JavaScript: WebSocket Connection, Graph & Request Scheduler -->
+  <script>
+    // -------------------------------
+    // WebSocket Connection Setup for ReqGraph
+    // -------------------------------
+    let ws;
+    function initWebSocket() {
+      ws = new WebSocket("ws://localhost:8080/ws");
+      ws.onopen = () => { console.log("WebSocket connected."); };
+      ws.onmessage = (event) => {
+        try {
+          const message = JSON.parse(event.data);
+          if(message.type === "httpResponse") {
+            if(message.responseCode) { updateResponseCodeCount(message.responseCode); }
+            if(message.latency) {
+              lastLatency = message.latency;
+              latencySeries.push({ time: travelTime, latency: message.latency });
+            }
+            drawGraph();
+          }
+        } catch(e) {
+          console.error("WebSocket message error:", e);
+        }
+      };
+      ws.onerror = (error) => { console.error("WebSocket error:", error); };
+      ws.onclose = () => { console.log("WebSocket closed."); };
+    }
+    initWebSocket();
+
+    // -------------------------------
+    // Global Variables for Graph and Data
+    // -------------------------------
+    const leftPadding = 60, rightPadding = 60, topPadding = 40, bottomPadding = 60;
+    const canvas = document.getElementById("canvas"), ctx = canvas.getContext("2d");
+    const testPeriodInput = document.getElementById("testPeriodInput");
+    const logModeCheckbox = document.getElementById("logModeCheckbox");
+    const progressSlider = document.getElementById("progressSlider");
+    const progressDisplay = document.getElementById("progressDisplay");
+    const startStopButton = document.getElementById("startStopButton");
+    const resetButton = document.getElementById("resetButton");
+    const editForm = document.getElementById("editForm");
+    const editX = document.getElementById("editX"), editY = document.getElementById("editY");
+    const updateButton = document.getElementById("updateButton"), cancelButton = document.getElementById("cancelButton");
+    const cursorDisplay = document.getElementById("cursorDisplay"), bigYDisplay = document.getElementById("bigYDisplay");
+    const canvasContainer = document.getElementById("canvasContainer");
+
+    let testPeriod = Number(testPeriodInput.value);
+    const DEFAULT_Y_MAX = 0.1, MIN_Y_LOG = 0.001;
+    let yMax = DEFAULT_Y_MAX;
+    let logMode = false;
+    let points = [
+      { properX: 0, properY: 0, fixed: true },
+      { properX: testPeriod, properY: 0, fixed: true }
+    ];
+    let draggingPoint = null, dragOffset = { x: 0, y: 0 }, isDragging = false;
+    let mouseDownPos = { x: 0, y: 0 }, DRAG_THRESHOLD = 5;
+    let editingPoint = null;
+    let playing = false, travelStartTime = 0, travelTime = 0, progress = 0;
+    let latencySeries = [];
+    let lastLatency = 0;
+
+    // -------------------------------
+    // Helper Functions for Graph
+    // -------------------------------
+    function getNiceInterval(maxVal, desiredMarkers) {
+      const roughInterval = maxVal / desiredMarkers;
+      const exponent = Math.floor(Math.log10(roughInterval));
+      const fraction = roughInterval / Math.pow(10, exponent);
+      let niceFraction = (fraction < 1.5) ? 1 : (fraction < 3) ? 2 : (fraction < 7) ? 5 : 10;
+      return niceFraction * Math.pow(10, exponent);
+    }
+    function snapX(val) {
+      let xMarkerInterval = getNiceInterval(testPeriod, 10);
+      let xSnapInterval = xMarkerInterval / 3;
+      return Math.round(val / xSnapInterval) * xSnapInterval;
+    }
+    function snapY(val) {
+      let yMarkerInterval = getNiceInterval(yMax, 10);
+      let ySnapInterval = yMarkerInterval / 3;
+      return Math.round(val / ySnapInterval) * ySnapInterval;
+    }
+    function formatYAxisValue(val) {
+      if(val === 0) return "0";
+      if(val < 1) { let denominator = Math.round(1/val); return "1/" + denominator; }
+      return val.toFixed(1);
+    }
+    function canvasYToProperY(canvasY) {
+      const usableHeight = canvas.height - topPadding - bottomPadding;
+      if(!logMode) { return ((canvas.height - bottomPadding - canvasY)/usableHeight)*yMax; }
+      else {
+        let ratio = (canvas.height - bottomPadding - canvasY)/usableHeight;
+        return Math.exp(ratio*(Math.log(yMax)-Math.log(MIN_Y_LOG))+Math.log(MIN_Y_LOG));
+      }
+    }
+    function updateCanvasCoordinates() {
+      const usableWidth = canvas.width - leftPadding - rightPadding;
+      const usableHeight = canvas.height - topPadding - bottomPadding;
+      points.forEach(p => {
+        p.canvasX = leftPadding + (p.properX/testPeriod)*usableWidth;
+        if(!logMode) { p.canvasY = canvas.height - bottomPadding - (p.properY/yMax)*usableHeight; }
+        else {
+          let yVal = Math.max(p.properY, MIN_Y_LOG);
+          p.canvasY = canvas.height - bottomPadding - ((Math.log(yVal)-Math.log(MIN_Y_LOG))/(Math.log(yMax)-Math.log(MIN_Y_LOG)))*usableHeight;
+        }
+      });
+    }
+    function updateFixedPoints() {
+      for(let p of points) {
+        if(p.fixed) {
+          p.properX = (p.properX === 0) ? 0 : testPeriod;
+          p.properY = logMode ? Math.max(p.properY, MIN_Y_LOG) : Math.max(p.properY, 0);
+        }
+      }
+    }
+    function getInterpolatedY(time) {
+      let sorted = points.slice().sort((a,b)=>a.properX-b.properX);
+      if(time <= sorted[0].properX) return sorted[0].properY;
+      if(time >= sorted[sorted.length-1].properX) return sorted[sorted.length-1].properY;
+      for(let i=0; i<sorted.length-1; i++){
+        let p1 = sorted[i], p2 = sorted[i+1];
+        if(time>=p1.properX && time<=p2.properX) {
+          let t = (time-p1.properX)/(p2.properX-p1.properX);
+          return p1.properY + t*(p2.properY-p1.properY);
+        }
+      }
+      return 0;
+    }
+    function recalcYMax() {
+      let maxVal = DEFAULT_Y_MAX;
+      for(let p of points) { if(p.properY > maxVal) maxVal = p.properY; }
+      return maxVal;
+    }
+    
+    // -------------------------------
+    // Edit Form Overlay Functions
+    // -------------------------------
+    function showEditForm(point, event) {
+      editingPoint = point;
+      editX.value = point.properX; editY.value = point.properY;
+      editX.disabled = point.fixed;
+      const containerRect = canvasContainer.getBoundingClientRect();
+      editForm.style.left = (event.clientX - containerRect.left) + "px";
+      editForm.style.top = (event.clientY - containerRect.top) + "px";
+      editForm.style.display = "block";
+    }
+    function hideEditForm() { editForm.style.display = "none"; editingPoint = null; }
+    updateButton.addEventListener("click", () => {
+      if(editingPoint) {
+        let newX = editingPoint.fixed ? editingPoint.properX : parseFloat(editX.value);
+        let newY = parseFloat(editY.value);
+        if(!isNaN(newX) && !isNaN(newY)) {
+          newX = editingPoint.fixed ? newX : Math.max(0, Math.min(newX, testPeriod));
+          newY = logMode ? Math.max(MIN_Y_LOG, newY) : Math.max(0, newY);
+          editingPoint.properX = newX; editingPoint.properY = newY;
+          hideEditForm(); drawGraph();
+        }
+      }
+    });
+    cancelButton.addEventListener("click", () => { hideEditForm(); });
+    
+    // -------------------------------
+    // Draw Merged Graph (Request Count and Latency)
+    // -------------------------------
+    function drawGraph() {
+      points = points.filter(p => p.fixed || p.properX <= testPeriod);
+      updateFixedPoints();
+      yMax = recalcYMax();
+      updateCanvasCoordinates();
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      
+      const usableWidth = canvas.width - leftPadding - rightPadding;
+      const usableHeight = canvas.height - topPadding - bottomPadding;
+      
+      // Draw x-axis markers (Time)
+      const xMarkerInterval = getNiceInterval(testPeriod, 10);
+      ctx.save(); ctx.strokeStyle = "#ccc"; ctx.lineWidth = 1; ctx.setLineDash([5,5]);
+      for(let t = 0; t <= testPeriod; t += xMarkerInterval) {
+        let markerX = leftPadding + (t / testPeriod) * usableWidth;
+        ctx.beginPath(); ctx.moveTo(markerX, topPadding);
+        ctx.lineTo(markerX, canvas.height - bottomPadding); ctx.stroke();
+        ctx.fillStyle = "black"; ctx.font = "10px Arial"; ctx.textAlign = "center";
+        ctx.fillText(t.toString(), markerX, canvas.height - bottomPadding + 12);
+      }
+      ctx.restore();
+      
+      // Draw y-axis markers for Request Count per Second// Draw y-axis markers for Request Count per Second
+      ctx.save();
+      ctx.strokeStyle = "#ccc";
+      ctx.lineWidth = 1;
+      ctx.setLineDash([5, 5]);
+      if (!logMode) {
+        const yMarkerInterval = getNiceInterval(yMax, 10);
+        for (let yVal = 0; yVal <= yMax; yVal += yMarkerInterval) {
+          let markerY = canvas.height - bottomPadding - (yVal / yMax) * usableHeight;
+          ctx.beginPath();
+          ctx.moveTo(leftPadding, markerY);
+          ctx.lineTo(canvas.width - rightPadding, markerY);
+          ctx.stroke();
+          ctx.fillStyle = "black";
+          ctx.font = "10px Arial";
+          ctx.textAlign = "right";
+          ctx.fillText(formatYAxisValue(yVal), leftPadding - 5, markerY + 3);
+        }
+      } else {
+        // Log mode: use a logarithmic scale for y-axis markers.
+        let logMin = Math.log10(MIN_Y_LOG);
+        let logMax = Math.log10(yMax);
+        const desiredMarkers = 10;
+        const markerIntervalLog = (logMax - logMin) / desiredMarkers;
+        for (let i = 0; i <= desiredMarkers; i++) {
+          let markerLog = logMin + i * markerIntervalLog;
+          let markerVal = Math.pow(10, markerLog);
+          let ratio = (markerLog - logMin) / (logMax - logMin);
+          let markerY = canvas.height - bottomPadding - ratio * usableHeight;
+          ctx.beginPath();
+          ctx.moveTo(leftPadding, markerY);
+          ctx.lineTo(canvas.width - rightPadding, markerY);
+          ctx.stroke();
+          ctx.fillStyle = "black";
+          ctx.font = "10px Arial";
+          ctx.textAlign = "right";
+          ctx.fillText(formatYAxisValue(markerVal), leftPadding - 5, markerY + 3);
+        }
+      }
+      ctx.restore();
+      
+      // Draw Request Count per Second line (blue)
+      let sortedPoints = points.slice().sort((a,b)=>a.properX-b.properX);
+      if(sortedPoints.length > 0) {
+        ctx.beginPath(); ctx.moveTo(sortedPoints[0].canvasX, sortedPoints[0].canvasY);
+        for(let i = 1; i < sortedPoints.length; i++){
+          ctx.lineTo(sortedPoints[i].canvasX, sortedPoints[i].canvasY);
+        }
+        ctx.strokeStyle = "blue"; ctx.lineWidth = 2; ctx.stroke();
+      }
+      sortedPoints.forEach(p => {
+        ctx.beginPath(); ctx.arc(p.canvasX, p.canvasY, 4, 0, Math.PI * 2);
+        ctx.fillStyle = p.fixed ? "black" : "red"; ctx.fill();
+      });
+      
+      // Draw axes
+      ctx.strokeStyle = "black"; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(leftPadding, canvas.height - bottomPadding);
+      ctx.lineTo(canvas.width - rightPadding, canvas.height - bottomPadding); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(leftPadding, topPadding);
+      ctx.lineTo(leftPadding, canvas.height - bottomPadding); ctx.stroke();
+      ctx.fillStyle = "black"; ctx.font = "14px Arial"; ctx.textAlign = "center";
+      ctx.fillText("Time", leftPadding + usableWidth/2, canvas.height - 5);
+      ctx.save(); ctx.translate(15, topPadding + usableHeight/2);
+      ctx.rotate(-Math.PI/2); ctx.textAlign = "center";
+      ctx.fillText("Request Count per Second", 0, 0); ctx.restore();
+      
+      // Draw travel marker
+      drawTravelMarker();
+      
+      // Draw Merged Latency Graph Overlay (half-transparent red)
+      if(latencySeries.length > 0) {
+        let maxLatency = Math.max(...latencySeries.map(pt => pt.latency));
+        if(maxLatency === 0) maxLatency = 1;
+        ctx.beginPath();
+        for(let i = 0; i < latencySeries.length; i++){
+          let pt = latencySeries[i];
+          let x = leftPadding + (pt.time/testPeriod)*usableWidth;
+          let y = canvas.height - bottomPadding - (pt.latency/maxLatency)*usableHeight;
+          if(i === 0) { ctx.moveTo(x, y); } else { ctx.lineTo(x, y); }
+        }
+        ctx.strokeStyle = "rgba(255, 0, 0, 0.5)";
+        ctx.lineWidth = 2; ctx.stroke();
+      }
+    }
+    function drawTravelMarker() {
+      const usableWidth = canvas.width - leftPadding - rightPadding;
+      const travelX = leftPadding + (travelTime/testPeriod)*usableWidth;
+      ctx.save(); ctx.strokeStyle = "red"; ctx.lineWidth = 2; ctx.setLineDash([]);
+      ctx.beginPath(); ctx.moveTo(travelX, topPadding);
+      ctx.lineTo(travelX, canvas.height - bottomPadding); ctx.stroke();
+      ctx.restore();
+    }
+    
+    // -------------------------------
+    // Event Handlers & Animation for Graph
+    // -------------------------------
+    canvas.addEventListener("mousedown", (event) => {
+      const rect = canvas.getBoundingClientRect();
+      mouseDownPos.x = event.clientX; mouseDownPos.y = event.clientY; isDragging = false;
+      let mouseX = event.clientX - rect.left, mouseY = event.clientY - rect.top;
+      const threshold = 10; draggingPoint = null;
+      for(let p of points) {
+        let dx = p.canvasX - mouseX, dy = p.canvasY - mouseY;
+        if(Math.sqrt(dx*dx+dy*dy) < threshold) { 
+          draggingPoint = p; 
+          dragOffset.x = mouseX - p.canvasX; 
+          dragOffset.y = mouseY - p.canvasY;
+          break;
+        }
+      }
+    });
+    canvas.addEventListener("mousemove", (event) => {
+      const rect = canvas.getBoundingClientRect();
+      let mouseX = event.clientX - rect.left, mouseY = event.clientY - rect.top;
+      let cX = Math.max(leftPadding, Math.min(mouseX, canvas.width - rightPadding));
+      let cY = Math.max(topPadding, Math.min(mouseY, canvas.height - bottomPadding));
+      let properX = ((cX - leftPadding)/(canvas.width - leftPadding - rightPadding))*testPeriod;
+      let properY = logMode ? canvasYToProperY(cY) : ((canvas.height - bottomPadding - cY)/(canvas.height - topPadding - bottomPadding))*yMax;
+      properX = snapX(properX); properY = snapY(properY);
+      properY = logMode ? Math.max(MIN_Y_LOG, properY) : Math.max(0, properY);
+      cursorDisplay.textContent = `Cursor: X = ${properX.toFixed(1)}, Y = ${properY.toFixed(1)}`;
+      if(draggingPoint) {
+        let distX = event.clientX - mouseDownPos.x, distY = event.clientY - mouseDownPos.y;
+        if((distX*distX+distY*distY) > DRAG_THRESHOLD*DRAG_THRESHOLD) { isDragging = true; }
+        if(isDragging) {
+          let newX = mouseX - dragOffset.x, newY = mouseY - dragOffset.y;
+          let rawProperX = ((newX - leftPadding)/(canvas.width-leftPadding-rightPadding))*testPeriod;
+          let rawProperY = logMode ? canvasYToProperY(newY) : ((canvas.height-bottomPadding-newY)/(canvas.height-topPadding-bottomPadding))*yMax;
+          let snappedProperX = snapX(rawProperX), snappedProperY = snapY(rawProperY);
+          snappedProperX = Math.max(0, Math.min(snappedProperX, testPeriod));
+          snappedProperY = logMode ? Math.max(MIN_Y_LOG, snappedProperY) : Math.max(0, snappedProperY);
+          if(draggingPoint.fixed) { draggingPoint.properY = snappedProperY; }
+          else { draggingPoint.properX = snappedProperX; draggingPoint.properY = snappedProperY; }
+          drawGraph();
+        }
+      }
+    });
+    canvas.addEventListener("mouseup", () => { if(draggingPoint) { draggingPoint = null; drawGraph(); } });
+    canvas.addEventListener("click", (event) => {
+      if(isDragging) { isDragging = false; return; }
+      editForm.style.display = "none";
+      const rect = canvas.getBoundingClientRect();
+      let mouseX = event.clientX - rect.left, mouseY = event.clientY - rect.top, threshold = 10, foundPoint = null;
+      for(let p of points) {
+        let dx = p.canvasX - mouseX, dy = p.canvasY - mouseY;
+        if(Math.sqrt(dx*dx+dy*dy) < threshold) { foundPoint = p; break; }
+      }
+      if(foundPoint) { showEditForm(foundPoint, event); }
+      else {
+        let properX = ((mouseX-leftPadding)/(canvas.width-leftPadding-rightPadding))*testPeriod;
+        let properY = logMode ? canvasYToProperY(mouseY) : ((canvas.height-bottomPadding-mouseY)/(canvas.height-topPadding-bottomPadding))*yMax;
+        properX = snapX(properX); properY = snapY(properY);
+        properX = Math.max(0, Math.min(properX, testPeriod));
+        properY = logMode ? Math.max(MIN_Y_LOG, properY) : Math.max(0, properY);
+        if(properX > 0 && properX < testPeriod) { points.push({ properX, properY, fixed: false }); drawGraph(); }
+      }
+    });
+    canvas.addEventListener("contextmenu", (event) => {
+      event.preventDefault(); editForm.style.display = "none";
+      const rect = canvas.getBoundingClientRect();
+      let mouseX = event.clientX - rect.left, mouseY = event.clientY - rect.top, threshold = 10;
+      for(let i = 0; i < points.length; i++){
+        let p = points[i], dx = p.canvasX - mouseX, dy = p.canvasY - mouseY;
+        if(Math.sqrt(dx*dx+dy*dy) < threshold) { points.splice(i,1); drawGraph(); break; }
+      }
+    });
+    progressSlider.addEventListener("input", () => {
+      progress = parseFloat(progressSlider.value);
+      travelTime = (progress/100) * testPeriod;
+      progressDisplay.textContent = `Current Progress: ${progress.toFixed(1)}%`;
+      let currentY = getInterpolatedY(travelTime);
+      let currentYText = currentY === 0 ? "0" : (currentY < 1 ? formatYAxisValue(currentY) : currentY.toFixed(1));
+      bigYDisplay.textContent = `Current Request Count per Second: ${currentYText}`;
+      startStopButton.textContent = progress > 0 ? "Resume" : "Start";
+      drawGraph();
+    });
+    function animateTravel(timestamp) {
+      if(!playing) return;
+      if(!travelStartTime) travelStartTime = timestamp;
+      travelTime = (timestamp - travelStartTime)/1000;
+      if(travelTime > testPeriod) { travelTime = testPeriod; playing = false; startStopButton.textContent = travelTime>0 ? "Resume" : "Start"; }
+      progress = (travelTime/testPeriod)*100; if(progress>100) progress = 100;
+      progressSlider.value = progress;
+      progressDisplay.textContent = `Current Progress: ${progress.toFixed(1)}%`;
+      let currentY = getInterpolatedY(travelTime);
+      let currentYText = currentY === 0 ? "0" : (currentY < 1 ? formatYAxisValue(currentY) : currentY.toFixed(1));
+      bigYDisplay.textContent = `Current Request Count per Second: ${currentYText}`;
+      if(latencySeries.length === 0 || (travelTime - latencySeries[latencySeries.length-1].time) >= 0.1) {
+        latencySeries.push({ time: travelTime, latency: lastLatency });
+      }
+      drawGraph();
+      if(playing) { requestAnimationFrame(animateTravel); }
+    }
+    startStopButton.addEventListener("click", () => {
+      if(playing) { playing = false; startStopButton.textContent = progress>0 ? "Resume" : "Start"; }
+      else {
+        playing = true; travelTime = (progress/100)*testPeriod;
+        travelStartTime = performance.now() - travelTime*1000;
+        startStopButton.textContent = "Stop";
+        requestAnimationFrame(animateTravel);
+        scheduleNextRequest();
+      }
+    });
+    resetButton.addEventListener("click", () => {
+      playing = false; travelTime = 0; progress = 0;
+      progressSlider.value = 0;
+      progressDisplay.textContent = "Current Progress: 0.0%";
+      bigYDisplay.textContent = "Current Request Count per Second: -";
+      points = points.filter(p => p.fixed);
+      latencySeries = [];
+      lastLatency = 0;
+      drawGraph();
+      startStopButton.textContent = "Start";
+    });
+    logModeCheckbox.addEventListener("change", () => { logMode = logModeCheckbox.checked; updateCanvasCoordinates(); drawGraph(); });
+    testPeriodInput.addEventListener("change", () => {
+      const newVal = Number(testPeriodInput.value);
+      if(!isNaN(newVal) && newVal>0) { testPeriod = newVal; drawGraph(); }
+    });
+    drawGraph();
+    
+    // -------------------------------
+    // HTTP Request via WebSocket and Scheduler
+    // -------------------------------
+    const httpMethodSelect = document.getElementById("httpMethod");
+    const uriInput = document.getElementById("uri");
+    const bodyContainer = document.getElementById("bodyContainer");
+    httpMethodSelect.addEventListener("change", function() {
+      const method = this.value;
+      bodyContainer.style.display = (method === "GET" || method === "HEAD") ? "none" : "block";
+    });
+    httpMethodSelect.dispatchEvent(new Event("change"));
+    document.getElementById("addHeaderButton").addEventListener("click", function() {
+      const headersContainer = document.getElementById("headersContainer");
+      const newRow = document.createElement("div");
+      newRow.className = "flex gap-2 mb-2 header-row";
+      newRow.innerHTML = `
+        <input type="text" class="header-key mt-1 block w-1/2 border-gray-300 rounded-md shadow-sm" placeholder="Header Name" />
+        <input type="text" class="header-value mt-1 block w-1/2 border-gray-300 rounded-md shadow-sm" placeholder="Header Value" />
+        <button type="button" class="remove-header bg-red-500 text-white px-2 py-1 rounded">Remove</button>
+      `;
+      headersContainer.appendChild(newRow);
+    });
+    document.getElementById("headersContainer").addEventListener("click", function(e) {
+      if(e.target && e.target.classList.contains("remove-header")) { e.target.parentElement.remove(); }
+    });
+    const responseCodeTableBody = document.querySelector("#responseCodeTable tbody");
+    let responseCodeCounts = {};
+    function updateResponseCodeCount(code) {
+      responseCodeCounts[code] = (responseCodeCounts[code] || 0) + 1;
+      drawResponseCodeTable();
+    }
+    function drawResponseCodeTable() {
+      responseCodeTableBody.innerHTML = "";
+      for(let code in responseCodeCounts) {
+        const row = document.createElement("tr");
+        row.innerHTML = `<td class="border px-4 py-2">${code}</td><td class="border px-4 py-2">${responseCodeCounts[code]}</td>`;
+        responseCodeTableBody.appendChild(row);
+      }
+    }
+    function sendHttpRequest() {
+      if(ws && ws.readyState === WebSocket.OPEN) {
+        let headers = {};
+        document.querySelectorAll("#headersContainer .header-row").forEach(row => {
+          const key = row.querySelector(".header-key").value.trim();
+          const value = row.querySelector(".header-value").value.trim();
+          if(key !== "") { headers[key] = value; }
+        });
+        const msg = {
+          type: "httpRequest",
+          method: httpMethodSelect.value,
+          url: uriInput.value,
+          headers: headers,
+          body: document.getElementById("body").value
+        };
+        ws.send(JSON.stringify(msg));
+      } else {
+        console.error("WebSocket is not open.");
+      }
+    }
+    function scheduleNextRequest() {
+      if(!playing) return;
+      let currentRate = getInterpolatedY(travelTime);
+      if(currentRate <= 0) { setTimeout(scheduleNextRequest, 500); return; }
+      sendHttpRequest();
+      let delay = 1000 / currentRate;
+      setTimeout(scheduleNextRequest, delay);
+    }
+  </script>
+</body>
+</html>
