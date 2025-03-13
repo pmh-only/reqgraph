@@ -3,7 +3,6 @@
 <head>
   <meta charset="UTF-8" />
   <title>ReqGraph - Request Based on Graph Value</title>
-  <!-- Tailwind CSS via CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
     canvas {
@@ -23,9 +22,7 @@
     </div>
   </header>
 
-  <!-- Main Container -->
   <main class="max-w-4xl mx-auto px-4 py-8 space-y-8">
-    <!-- Controls Section -->
     <div id="controls" class="bg-white p-6 rounded-lg shadow">
       <div class="flex flex-wrap items-center justify-between gap-4">
         <div>
@@ -44,7 +41,6 @@
       </div>
     </div>
 
-    <!-- HTTP Request Form Section -->
     <div id="httpRequestForm" class="bg-white p-6 rounded-lg shadow">
       <h2 class="text-2xl font-bold mb-4">HTTP Request</h2>
       <form id="httpForm" class="space-y-4">
@@ -81,7 +77,6 @@
       </form>
     </div>
 
-    <!-- Response Information Section -->
     <div id="responseInfo" class="bg-white p-6 rounded-lg shadow">
       <h2 class="text-2xl font-bold mb-4">Response Information</h2>
       <div>
@@ -94,13 +89,12 @@
             </tr>
           </thead>
           <tbody>
-            <!-- Dynamic rows -->
+            <!-- Render point -->
           </tbody>
         </table>
       </div>
     </div>
 
-    <!-- Graph Section -->
     <div id="canvasContainer" class="relative bg-white p-6 rounded-lg shadow">
       <div class="flex items-center space-x-2">
           <label for="logModeCheckbox" class="text-gray-700 font-medium">Log Mode</label>
@@ -108,7 +102,6 @@
       </div>
 
       <canvas id="canvas" width="800" height="600" class="rounded"></canvas>
-      <!-- Editable form overlay for adjusting point coordinates -->
       <div id="editForm" class="absolute bg-white border border-gray-400 rounded p-2 shadow-lg">
         <div class="mb-2">
           <label class="block text-sm font-medium text-gray-700">X:
@@ -128,22 +121,16 @@
     </div>
   </main>
 
-  <!-- Footer Information -->
   <footer class="max-w-4xl mx-auto px-4 py-4 text-center text-gray-600">
     <p>© 2025 Minhyeok Park. All rights reserved.</p>
   </footer>
 
-  <!-- Additional Info -->
   <div id="cursorDisplay" class="max-w-4xl mx-auto p-2 text-center text-gray-700">Cursor: X = -, Y = -</div>
   <div id="bigYDisplay" class="max-w-4xl mx-auto p-2 text-center text-gray-800 font-bold text-2xl">
     Current Request Count per Second: -
   </div>
 
-  <!-- JavaScript: WebSocket Connection, Graph & Request Scheduler -->
   <script>
-    // -------------------------------
-    // WebSocket Connection Setup for ReqGraph
-    // -------------------------------
     let ws;
     function initWebSocket() {
       ws = new WebSocket("ws://localhost:8080/ws");
@@ -168,9 +155,6 @@
     }
     initWebSocket();
 
-    // -------------------------------
-    // Global Variables for Graph and Data
-    // -------------------------------
     const leftPadding = 60, rightPadding = 60, topPadding = 40, bottomPadding = 60;
     const canvas = document.getElementById("canvas"), ctx = canvas.getContext("2d");
     const testPeriodInput = document.getElementById("testPeriodInput");
@@ -200,9 +184,6 @@
     let latencySeries = [];
     let lastLatency = 0;
 
-    // -------------------------------
-    // Helper Functions for Graph
-    // -------------------------------
     function getNiceInterval(maxVal, desiredMarkers) {
       const roughInterval = maxVal / desiredMarkers;
       const exponent = Math.floor(Math.log10(roughInterval));
@@ -272,9 +253,6 @@
       return maxVal;
     }
     
-    // -------------------------------
-    // Edit Form Overlay Functions
-    // -------------------------------
     function showEditForm(point, event) {
       editingPoint = point;
       editX.value = point.properX; editY.value = point.properY;
@@ -299,9 +277,6 @@
     });
     cancelButton.addEventListener("click", () => { hideEditForm(); });
     
-    // -------------------------------
-    // Draw Merged Graph (Request Count and Latency)
-    // -------------------------------
     function drawGraph() {
       points = points.filter(p => p.fixed || p.properX <= testPeriod);
       updateFixedPoints();
@@ -312,7 +287,6 @@
       const usableWidth = canvas.width - leftPadding - rightPadding;
       const usableHeight = canvas.height - topPadding - bottomPadding;
       
-      // Draw x-axis markers (Time)
       const xMarkerInterval = getNiceInterval(testPeriod, 10);
       ctx.save(); ctx.strokeStyle = "#ccc"; ctx.lineWidth = 1; ctx.setLineDash([5,5]);
       for(let t = 0; t <= testPeriod; t += xMarkerInterval) {
@@ -324,7 +298,6 @@
       }
       ctx.restore();
       
-      // Draw y-axis markers for Request Count per Second// Draw y-axis markers for Request Count per Second
       ctx.save();
       ctx.strokeStyle = "#ccc";
       ctx.lineWidth = 1;
@@ -343,7 +316,6 @@
           ctx.fillText(formatYAxisValue(yVal), leftPadding - 5, markerY + 3);
         }
       } else {
-        // Log mode: use a logarithmic scale for y-axis markers.
         let logMin = Math.log10(MIN_Y_LOG);
         let logMax = Math.log10(yMax);
         const desiredMarkers = 10;
@@ -365,7 +337,6 @@
       }
       ctx.restore();
       
-      // Draw Request Count per Second line (blue)
       let sortedPoints = points.slice().sort((a,b)=>a.properX-b.properX);
       if(sortedPoints.length > 0) {
         ctx.beginPath(); ctx.moveTo(sortedPoints[0].canvasX, sortedPoints[0].canvasY);
@@ -379,7 +350,6 @@
         ctx.fillStyle = p.fixed ? "black" : "red"; ctx.fill();
       });
       
-      // Draw axes
       ctx.strokeStyle = "black"; ctx.lineWidth = 1;
       ctx.beginPath(); ctx.moveTo(leftPadding, canvas.height - bottomPadding);
       ctx.lineTo(canvas.width - rightPadding, canvas.height - bottomPadding); ctx.stroke();
@@ -391,10 +361,8 @@
       ctx.rotate(-Math.PI/2); ctx.textAlign = "center";
       ctx.fillText("Request Count per Second", 0, 0); ctx.restore();
       
-      // Draw travel marker
       drawTravelMarker();
       
-      // Draw Merged Latency Graph Overlay (half-transparent red)
       if(latencySeries.length > 0) {
         let maxLatency = Math.max(...latencySeries.map(pt => pt.latency));
         if(maxLatency === 0) maxLatency = 1;
@@ -418,9 +386,6 @@
       ctx.restore();
     }
     
-    // -------------------------------
-    // Event Handlers & Animation for Graph
-    // -------------------------------
     canvas.addEventListener("mousedown", (event) => {
       const rect = canvas.getBoundingClientRect();
       mouseDownPos.x = event.clientX; mouseDownPos.y = event.clientY; isDragging = false;
@@ -546,9 +511,6 @@
     });
     drawGraph();
     
-    // -------------------------------
-    // HTTP Request via WebSocket and Scheduler
-    // -------------------------------
     const httpMethodSelect = document.getElementById("httpMethod");
     const uriInput = document.getElementById("uri");
     const bodyContainer = document.getElementById("bodyContainer");
